@@ -14,3 +14,15 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/test;
+
+@test:Config
+function testExposeConfigDefaultsToEveryAction() {
+    ExposeConfig config = {};
+    test:assertEquals(config.operations, [READ, CREATE, UPDATE, DELETE]);
+}
+
+@test:Config
+function testOperationValues() {
+    test:assertEquals([READ, CREATE, UPDATE, DELETE], ["read", "create", "update", "delete"]);
+}
