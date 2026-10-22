@@ -25,6 +25,7 @@ the specification is considered a bug.
     * [2.1. The error body](#21-the-error-body)
     * [2.2. Mapping persist errors](#22-mapping-persist-errors)
 * [3. Value conversions](#3-value-conversions)
+* [4. Compiler plugin](#4-compiler-plugin)
 
 ## 1. The `Expose` annotation
 
@@ -160,3 +161,22 @@ and whose detail holds the format.
   offset, including `Z`, is a `ConversionError`.
 - **`time:Utc`:** written with `time:utcToString`. A string with the offset `Z` or `+hh:mm` is accepted and converted
   to UTC, as `time:utcFromString` does.
+
+## 4. Compiler plugin
+
+A persist model is not compiled with its package: `bal build` reads it through the persist tool, and the compiler sees
+it only when the file is compiled on its own, as the IDE does. The compiler plugin validates the annotations of such a
+file, and the persist tool repeats the same checks every time it generates a data service.
+
+The plugin acts only on a single-file project whose file is in a package's `persist` directory, `persist/<file>`, or
+in a named model's directory, `persist/<model>/<file>`, where the directory above `persist` holds `Ballerina.toml`.
+It does nothing in any other source.
+
+| Check | Reported by | Message |
+|---|---|---|
+| `@dataservice:Expose` is on a record type | The plugin, `DATASERVICE_101` | `the @dataservice:Expose annotation is allowed only on a record type in the persist model.` |
+| `operations` is non-empty and has only `Operation` values | The compiler, through the type of `operations` | The compiler's type error |
+| `operations` has no duplicates | The plugin, `DATASERVICE_102` | `duplicate operation '<value>' in the @dataservice:Expose annotation of the entity '<Entity>'.` |
+
+`<value>` is the repeated operation as it is written, such as `dataservice:READ` or `"read"`. An operation written
+as a member and as its string value is a duplicate. Each repeat is reported.
