@@ -90,7 +90,8 @@ release {
     }
 }
 
-def buildTasks = [':dataservice-ballerina:build']
+def buildTasks = [':dataservice-compiler-plugin:build', ':dataservice-ballerina:build',
+                  ':dataservice-compiler-plugin-tests:build']
 if (tasks.names.contains('build')) {
     tasks.named('build') { dependsOn(buildTasks) }
 } else {

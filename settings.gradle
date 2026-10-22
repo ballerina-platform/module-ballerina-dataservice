@@ -43,10 +43,14 @@ plugins {
 rootProject.name = 'module-ballerina-dataservice'
 
 include ':checkstyle'
+include ':dataservice-compiler-plugin'
 include ':dataservice-ballerina'
+include ':dataservice-compiler-plugin-tests'
 
 project(':checkstyle').projectDir = file("build-config${File.separator}checkstyle")
+project(':dataservice-compiler-plugin').projectDir = file('compiler-plugin')
 project(':dataservice-ballerina').projectDir = file('ballerina')
+project(':dataservice-compiler-plugin-tests').projectDir = file('compiler-plugin-tests')
 
 develocity {
     buildScan {
