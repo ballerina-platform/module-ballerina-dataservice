@@ -24,6 +24,7 @@ the specification is considered a bug.
 * [2. Errors](#2-errors)
     * [2.1. The error body](#21-the-error-body)
     * [2.2. Mapping persist errors](#22-mapping-persist-errors)
+* [3. Value conversions](#3-value-conversions)
 
 ## 1. The `Expose` annotation
 
@@ -123,3 +124,39 @@ written `P1/1`, `1.5` stays `1.5`, and a `decimal` keeps its scale.
 
 For a constraint violation and an internal error, the function logs the error, with the entity's name, at the `ERROR`
 level. The error's own message is not returned to the caller.
+
+## 3. Value conversions
+
+The JSON form that Ballerina gives `byte[]` and the `time:*` record types does not suit a client: `time:Utc` is a tuple,
+the other `time:*` types are records, and `byte[]` is an array of numbers. A protocol that sends these values as JSON
+uses the following functions, so that every protocol uses the same formats.
+
+```ballerina
+public type ConversionErrorDetail record {|
+    string format;
+|};
+
+public type ConversionError distinct error<ConversionErrorDetail>;
+```
+
+| Type | To string | From string | Format | `format` in `ConversionError` |
+|---|---|---|---|---|
+| `byte[]` | `bytesToString` | `bytesFromString` | Base64, RFC 4648 standard alphabet, padded | `a base64 string` |
+| `time:Date` | `dateToString` | `dateFromString` | `2024-01-02` | `an ISO 8601 date` |
+| `time:TimeOfDay` | `timeOfDayToString` | `timeOfDayFromString` | `10:15:30` or `10:15:30.5` | `an ISO 8601 time` |
+| `time:Civil` | `civilToString` | `civilFromString` | `2024-01-02T10:15:30`, without an offset | `an ISO 8601 date-time` |
+| `time:Utc` | `utcToString` | `utcFromString` | `2024-01-02T10:15:30Z` | `an ISO 8601 date-time` |
+
+Each `<type>ToString` function takes a value of the type and returns its string form. Each `<type>FromString` function
+takes a string and returns a value of the type, or a `ConversionError` whose message is `The value is not <format>.`
+and whose detail holds the format.
+
+- **`byte[]`:** the string must use the standard alphabet and padding. An unpadded string is a `ConversionError`.
+- **`time:Date`:** written as `YYYY-MM-DD`. The string must be a valid calendar date.
+- **`time:TimeOfDay`:** written as `HH:MM:SS`, followed by the fraction of a second only when it is not zero. A missing
+  `second` is written as `00`. The string must be `HH:MM:SS` with an optional fraction; `HH:MM` alone is a
+  `ConversionError`.
+- **`time:Civil`:** the date and the time joined by `T`. An offset in the value is not written. A string with an
+  offset, including `Z`, is a `ConversionError`.
+- **`time:Utc`:** written with `time:utcToString`. A string with the offset `Z` or `+hh:mm` is accepted and converted
+  to UTC, as `time:utcFromString` does.
