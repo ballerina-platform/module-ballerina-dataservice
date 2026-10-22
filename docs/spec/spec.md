@@ -21,6 +21,9 @@ the specification is considered a bug.
 ## Contents
 
 * [1. The `Expose` annotation](#1-the-expose-annotation)
+* [2. Errors](#2-errors)
+    * [2.1. The error body](#21-the-error-body)
+    * [2.2. Mapping persist errors](#22-mapping-persist-errors)
 
 ## 1. The `Expose` annotation
 
@@ -63,3 +66,60 @@ Each action enables these operations:
 
 Whether a data service is generated is decided by `options.dataservice` in the `[[tool.persist]]` entry of
 `Ballerina.toml`. The annotations only select what the service exposes.
+
+## 2. Errors
+
+### 2.1. The error body
+
+```ballerina
+public enum ErrorCode {
+    NOT_FOUND,
+    CONFLICT,
+    CONSTRAINT_VIOLATION,
+    INVALID_INPUT,
+    INTERNAL
+}
+
+public type DataserviceError record {|
+    ErrorCode code;
+    string message;
+|};
+```
+
+A data service error falls into one of these categories. Each protocol package maps a category to its own form, such
+as an HTTP status code.
+
+| Category | `code` | Raised when | Source |
+|---|---|---|---|
+| Not found | `NOT_FOUND` | No record has the given key | `persist:NotFoundError` |
+| Conflict | `CONFLICT` | A record with the key or a unique value already exists | `persist:AlreadyExistsError` |
+| Constraint violation | `CONSTRAINT_VIOLATION` | A write violates a foreign key | `persist:ConstraintViolationError` |
+| Invalid input | `INVALID_INPUT` | The input cannot be bound to the operation's type, or a value is not in its format | The protocol module's binding error, or a [`ConversionError`](#3-value-conversions) |
+| Internal | `INTERNAL` | Any other failure | `persist:Error` and others |
+
+### 2.2. Mapping persist errors
+
+```ballerina
+public type KeyValue int|string|float|decimal|boolean;
+
+public isolated function toDataserviceError(error err, string entity = "", KeyValue[] key = [])
+        returns DataserviceError;
+```
+
+`toDataserviceError` maps an error that the persist client returned to the error body. `entity` is the entity's
+name and `key` holds the values of the record's key fields, in key order. The message is written by this function, not
+taken from the error, because the SQL datastores put driver text, such as table and constraint names, in their error
+messages:
+
+| Error | `code` | `message` |
+|---|---|---|
+| `persist:NotFoundError` | `NOT_FOUND` | `A record with the key '<key>' does not exist for the entity '<Entity>'.` |
+| `persist:AlreadyExistsError` | `CONFLICT` | `A record that conflicts with an existing record of the entity '<Entity>' already exists.` |
+| `persist:ConstraintViolationError` | `CONSTRAINT_VIOLATION` | `The operation violates a constraint of the entity '<Entity>'.` |
+| Any other error | `INTERNAL` | `An internal error occurred.` |
+
+`<key>` is each key value written with `toString`, joined by `/` in key order, so the composite key `["P1", 1]` is
+written `P1/1`, `1.5` stays `1.5`, and a `decimal` keeps its scale.
+
+For a constraint violation and an internal error, the function logs the error, with the entity's name, at the `ERROR`
+level. The error's own message is not returned to the caller.
