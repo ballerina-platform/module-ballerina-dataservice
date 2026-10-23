@@ -19,7 +19,7 @@ import ballerina/test;
 
 @test:Config
 function testNotFound() {
-    test:assertEquals(toDataserviceError(error persist:NotFoundError("no row"), "Employee", [99]), {
+    test:assertEquals(toErrorBody(error persist:NotFoundError("no row"), "Employee", [99]), {
         code: NOT_FOUND,
         message: "A record with the key '99' does not exist for the entity 'Employee'."
     });
@@ -27,20 +27,20 @@ function testNotFound() {
 
 @test:Config
 function testNotFoundCompositeKey() {
-    DataserviceError body = toDataserviceError(error persist:NotFoundError("no row"), "Assignment", ["P 1/a", 1]);
+    DataserviceError body = toErrorBody(error persist:NotFoundError("no row"), "Assignment", ["P 1/a", 1]);
     test:assertEquals(body.message, "A record with the key 'P 1/a/1' does not exist for the entity 'Assignment'.");
 }
 
 @test:Config
 function testKeyText() {
-    DataserviceError body = toDataserviceError(error persist:NotFoundError("no row"), "Rate",
+    DataserviceError body = toErrorBody(error persist:NotFoundError("no row"), "Rate",
             [1.5, 2.50d, true, "x"]);
     test:assertEquals(body.message, "A record with the key '1.5/2.50/true/x' does not exist for the entity 'Rate'.");
 }
 
 @test:Config
 function testConflict() {
-    test:assertEquals(toDataserviceError(error persist:AlreadyExistsError("Duplicate entry '1'"), "Employee", [1]), {
+    test:assertEquals(toErrorBody(error persist:AlreadyExistsError("Duplicate entry '1'"), "Employee", [1]), {
         code: CONFLICT,
         message: "A record that conflicts with an existing record of the entity 'Employee' already exists."
     });
@@ -48,7 +48,7 @@ function testConflict() {
 
 @test:Config
 function testConstraintViolation() {
-    test:assertEquals(toDataserviceError(error persist:ConstraintViolationError("FK_EMP_DEPT violated"), "Employee"), {
+    test:assertEquals(toErrorBody(error persist:ConstraintViolationError("FK_EMP_DEPT violated"), "Employee"), {
         code: CONSTRAINT_VIOLATION,
         message: "The operation violates a constraint of the entity 'Employee'."
     });
@@ -56,7 +56,7 @@ function testConstraintViolation() {
 
 @test:Config
 function testPersistErrorIsInternal() {
-    test:assertEquals(toDataserviceError(error persist:Error("connection refused"), "Employee"), {
+    test:assertEquals(toErrorBody(error persist:Error("connection refused"), "Employee"), {
         code: INTERNAL,
         message: "An internal error occurred."
     });
@@ -64,5 +64,5 @@ function testPersistErrorIsInternal() {
 
 @test:Config
 function testOtherErrorIsInternal() {
-    test:assertEquals(toDataserviceError(error("boom")), {code: INTERNAL, message: "An internal error occurred."});
+    test:assertEquals(toErrorBody(error("boom")), {code: INTERNAL, message: "An internal error occurred."});
 }

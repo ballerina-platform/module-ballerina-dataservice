@@ -104,11 +104,11 @@ as an HTTP status code.
 ```ballerina
 public type KeyValue int|string|float|decimal|boolean;
 
-public isolated function toDataserviceError(error err, string entity = "", KeyValue[] key = [])
+public isolated function toErrorBody(error err, string entity = "", KeyValue[] key = [])
         returns DataserviceError;
 ```
 
-`toDataserviceError` maps an error that the persist client returned to the error body. `entity` is the entity's
+`toErrorBody` maps an error that the persist client returned to the error body. `entity` is the entity's
 name and `key` holds the values of the record's key fields, in key order. The message is written by this function, not
 taken from the error, because the SQL datastores put driver text, such as table and constraint names, in their error
 messages:

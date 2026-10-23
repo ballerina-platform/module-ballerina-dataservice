@@ -44,7 +44,7 @@ public type KeyValue int|string|float|decimal|boolean;
 # + entity - The name of the entity
 # + key - The values of the record's key fields, in key order
 # + return - The error body for the error's category
-public isolated function toDataserviceError(error err, string entity = "", KeyValue[] key = [])
+public isolated function toErrorBody(error err, string entity = "", KeyValue[] key = [])
         returns DataserviceError {
     if err is persist:NotFoundError {
         return {
