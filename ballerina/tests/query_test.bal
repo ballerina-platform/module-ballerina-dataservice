@@ -160,6 +160,40 @@ function testFilterValueThatDoesNotParse() {
 }
 
 @test:Config
+function testNonFiniteFilterValue() {
+    Entity entity = {
+        name: "Item",
+        collection: "items",
+        'resource: "items",
+        datastore: H2,
+        fields: [
+            {name: "id", column: "id", 'type: INT, key: true},
+            {name: "rate", column: "rate", 'type: DECIMAL},
+            {name: "score", column: "score", 'type: FLOAT}
+        ]
+    };
+    foreach [string, float] [name, value] in [["rate", float:NaN], ["score", float:Infinity]] {
+        Query|DataserviceError|ConversionError result = toQuery(entity, pages, {[name]: {gt: value}});
+        if result !is ConversionError {
+            test:assertFail(string `Expected a ConversionError for ${name}`);
+        }
+        test:assertEquals(result.detail().'field, name);
+    }
+}
+
+@test:Config
+function testAnyOfLimit() {
+    PageConfig small = {size: 2, maxSize: 2};
+    Query|DataserviceError|ConversionError allowed = toQuery(employeeEntity(), small, {id: {anyOf: [1, 2]}});
+    test:assertTrue(allowed is Query);
+    Query|DataserviceError|ConversionError result = toQuery(employeeEntity(), small, {id: {anyOf: [1, 2, 3]}});
+    test:assertEquals(result, <DataserviceError>{
+        code: INVALID_INPUT,
+        message: "'anyOf' on the field 'id' can hold at most 2 values."
+    });
+}
+
+@test:Config
 function testSort() {
     Query query = checkedQuery(employeeEntity(), sort = ["-hiredOn", "email"]);
     test:assertEquals(sqlText(query.orderByClause), "\"Employee\".\"hired_on\" DESC, " +

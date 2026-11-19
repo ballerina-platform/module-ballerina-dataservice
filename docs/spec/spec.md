@@ -391,6 +391,7 @@ For example, the filter `{"hiredOn": {"gte": "2024-01-01"}, "name": {"startsWith
     2. For a to-many relation, `toIncludeQuery` reads the related records of one record, the page size plus one in key order. `trimToPage` cuts them to the page, and `attachMany` adds them as `{"items": [...], "hasMore": ...}`.
     3. The related records are reduced to the `<relation>.<field>` names, or kept whole when the relation is named alone.
 4. **Composite links** match as `OR` over the link tuples.
+5. **Matching:** `orderByKeys`, `attachOne` and `attachMany` match records to keys and links by exact value. A string key or foreign key must therefore be stored as the database returns it, so a column whose collation ignores case, or a `CHAR` column that pads its values, is not supported as a key or a foreign key.
 
 ### 8.7. Errors
 
@@ -405,8 +406,9 @@ For example, the filter `{"hiredOn": {"gte": "2024-01-01"}, "name": {"startsWith
 | A size below 1 | `The page size must be at least 1.` |
 | An offset below 0 | `The offset must be at least 0.` |
 | An offset for which `offset + size` exceeds the largest integer | `The offset and the page size together exceed the largest integer.` |
+| An `anyOf` list longer than `maxSize` | `'anyOf' on the field '<field>' can hold at most <maxSize> values.` |
 
-A filter value that does not parse, or is not of the field's type, is returned as a `ConversionError` whose detail holds the field name, so that a protocol writes its own message for it.
+A filter value that does not parse, is not of the field's type, or is a `float` that is `NaN` or infinite, is returned as a `ConversionError` whose detail holds the field name, so that a protocol writes its own message for it.
 
 ## 9. Constraints
 
@@ -427,7 +429,7 @@ When a constraint does not hold, `checkConstraints` returns an `INVALID_INPUT` e
 - Query values are bound as SQL parameters. Field and column names in a query come only from the entity description, never from the request.
 - An `Internal` field is left out of the entity description, so no query option can read, filter or sort on it.
 - The error body never carries the persist client's error message, because the SQL datastores put driver text, such as table and constraint names, in it. Constraint violations and internal errors are logged instead.
-- A page holds at most `maxPageSize` records, and a create at most `maxPageSize` records. An offset for which `offset + size` exceeds the largest integer is rejected.
+- A page holds at most `maxPageSize` records, a create at most `maxPageSize` records, and an `anyOf` filter at most `maxPageSize` values. An offset for which `offset + size` exceeds the largest integer is rejected.
 - Scopes are checked only when the persist tool option `options.dataservice.auth` is `true`. Without it, every exposed operation is open to every caller.
 
 ## References

@@ -164,7 +164,8 @@ isolated function optionsQuery(Entity entity, PageConfig config, map<map<anydata
                 return unusable(entity, name, "filter");
             }
             foreach [string, anydata] [operator, value] in operators.entries() {
-                Condition|DataserviceError|ConversionError condition = toCondition(entity, 'field, operator, value);
+                Condition|DataserviceError|ConversionError condition =
+                    toCondition(entity, 'field, operator, value, config.maxSize);
                 if condition !is Condition {
                     return condition;
                 }
@@ -451,7 +452,7 @@ isolated function findRelation(Entity entity, string name) returns Relation? {
     return ();
 }
 
-isolated function toCondition(Entity entity, Field 'field, string operator, anydata value)
+isolated function toCondition(Entity entity, Field 'field, string operator, anydata value, int maxValues)
         returns Condition|DataserviceError|ConversionError {
     if !isAllowed('field, operator) {
         return invalidInput(string `The operator '${operator}' cannot be used on the field '${
@@ -467,6 +468,9 @@ isolated function toCondition(Entity entity, Field 'field, string operator, anyd
     if operator == "anyOf" {
         if value !is anydata[] {
             return fieldError(conversionError("a list"), 'field);
+        }
+        if value.length() > maxValues {
+            return invalidInput(string `'anyOf' on the field '${'field.name}' can hold at most ${maxValues} values.`);
         }
         given = value;
     }
@@ -508,12 +512,18 @@ isolated function toSqlValue(Field 'field, anydata value) returns sql:Value|Conv
             return conversionError("an int");
         }
         FLOAT => {
+            if value is float && !value.isFinite() {
+                return conversionError("a finite float");
+            }
             if value is float|int|decimal {
                 return <float>value;
             }
             return conversionError("a float");
         }
         DECIMAL => {
+            if value is float && !value.isFinite() {
+                return conversionError("a decimal");
+            }
             if value is decimal|int|float {
                 return <decimal>value;
             }
