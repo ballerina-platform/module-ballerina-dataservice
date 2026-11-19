@@ -128,8 +128,9 @@ The compiler plugin acts only on a single-file project whose file is in a packag
 | `operations` names an action more than once | `DATASERVICE_102` | error | `duplicate operation '<value>' in the @dataservice:Expose annotation of the entity '<Entity>'. Remove the duplicate.` |
 | A scope is empty or has whitespace | `DATASERVICE_110` | error | `invalid scope '<value>' in the @dataservice:Expose annotation of the entity '<Entity>'. A scope must be a non-empty string without whitespace.` |
 | `scopes` names an action that is not in `operations` | `DATASERVICE_111` | error | `the @dataservice:Expose annotation of the entity '<Entity>' sets scopes for '<action>', which is not in 'operations'. Add it to 'operations', or remove its scopes.` |
+| `operations` is not a list written inline of `dataservice:` members and string literals, or `scopes` is not a mapping written inline of lists of string literals | `DATASERVICE_113` | error | `'<operations\|scopes>' in the @dataservice:Expose annotation of the entity '<Entity>' must list its values inline. Replace '<value>' with the values it stands for.` |
 
-`<value>` is the repeated operation or the scope as it is written, such as `dataservice:READ` or `"read"`. An action written as a member and as its string value is a duplicate, and each repeat is reported. An empty `operations` list or a value that is not an `Operation` is a type error that the compiler reports.
+`<value>` is the repeated operation or the scope as it is written, such as `dataservice:READ` or `"read"`, and for `DATASERVICE_113` the expression that is not written inline, such as a constant. A scope is checked by its value, so an escape such as `\t` counts as whitespace. An action written as a member and as its string value is a duplicate, and each repeat is reported. An empty `operations` list or a value that is not an `Operation` is a type error that the compiler reports.
 
 ## 4. Field rules
 

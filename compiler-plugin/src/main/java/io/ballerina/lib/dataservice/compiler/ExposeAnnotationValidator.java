@@ -18,6 +18,7 @@
 
 package io.ballerina.lib.dataservice.compiler;
 
+import io.ballerina.compiler.api.symbols.ConstantSymbol;
 import io.ballerina.compiler.api.symbols.Symbol;
 import io.ballerina.compiler.syntax.tree.AnnotationNode;
 import io.ballerina.compiler.syntax.tree.BasicLiteralNode;
@@ -44,11 +45,13 @@ import static io.ballerina.lib.dataservice.compiler.DiagnosticCodes.DATASERVICE_
 import static io.ballerina.lib.dataservice.compiler.DiagnosticCodes.DATASERVICE_102;
 import static io.ballerina.lib.dataservice.compiler.DiagnosticCodes.DATASERVICE_110;
 import static io.ballerina.lib.dataservice.compiler.DiagnosticCodes.DATASERVICE_111;
+import static io.ballerina.lib.dataservice.compiler.DiagnosticCodes.DATASERVICE_113;
 import static io.ballerina.lib.dataservice.compiler.PluginUtils.MODULE_NAME;
 import static io.ballerina.lib.dataservice.compiler.PluginUtils.ORG_NAME;
 import static io.ballerina.lib.dataservice.compiler.PluginUtils.fieldName;
 import static io.ballerina.lib.dataservice.compiler.PluginUtils.isAnnotation;
 import static io.ballerina.lib.dataservice.compiler.PluginUtils.report;
+import static io.ballerina.lib.dataservice.compiler.PluginUtils.stringValue;
 
 /**
  * Validates the `@dataservice:Expose` annotations of a persist model.
@@ -87,6 +90,7 @@ final class ExposeAnnotationValidator {
                 String entity = type.typeName().text().trim();
                 reportDuplicates(ctx, annotation, entity);
                 reportInvalidScopes(ctx, annotation, operations, entity);
+                reportNotInline(ctx, annotation, entity);
             } else {
                 report(ctx, DATASERVICE_101, annotation.location());
             }
@@ -161,8 +165,7 @@ final class ExposeAnnotationValidator {
                         && action.valueExpr().get() instanceof ListConstructorExpressionNode list) {
                     for (Node member : list.expressions()) {
                         if (member instanceof BasicLiteralNode literal && literal.kind() == SyntaxKind.STRING_LITERAL) {
-                            String text = literal.literalToken().text();
-                            String scope = text.substring(1, text.length() - 1);
+                            String scope = stringValue(literal);
                             if (scope.isEmpty() || scope.chars().anyMatch(Character::isWhitespace)) {
                                 report(ctx, DATASERVICE_110, member.location(), scope, entity);
                             }
@@ -173,6 +176,66 @@ final class ExposeAnnotationValidator {
         }
     }
 
+    // The tool reads the annotation from the model's syntax tree, so a value it cannot read there, such as a constant,
+    // is reported rather than read as no restriction.
+    private static void reportNotInline(SyntaxNodeAnalysisContext ctx, AnnotationNode annotation, String entity) {
+        if (annotation.annotValue().isEmpty()) {
+            return;
+        }
+        for (MappingFieldNode field : annotation.annotValue().get().fields()) {
+            if (!(field instanceof SpecificFieldNode specificField) || specificField.valueExpr().isEmpty()) {
+                continue;
+            }
+            String name = fieldName(specificField);
+            Node value = specificField.valueExpr().get();
+            if (OPERATIONS_FIELD.equals(name)) {
+                if (!(value instanceof ListConstructorExpressionNode list)) {
+                    reportNotInline(ctx, name, entity, value);
+                    continue;
+                }
+                list.expressions().forEach(member -> {
+                    if (!isDataserviceConstant(ctx, member) && !isStringLiteral(member)) {
+                        reportNotInline(ctx, name, entity, member);
+                    }
+                });
+            } else if (SCOPES_FIELD.equals(name)) {
+                if (!(value instanceof MappingConstructorExpressionNode scopes)) {
+                    reportNotInline(ctx, name, entity, value);
+                    continue;
+                }
+                for (MappingFieldNode actionField : scopes.fields()) {
+                    if (!(actionField instanceof SpecificFieldNode action)) {
+                        reportNotInline(ctx, name, entity, actionField);
+                    } else if (action.valueExpr().isPresent()
+                            && !(action.valueExpr().get() instanceof ListConstructorExpressionNode)) {
+                        reportNotInline(ctx, name, entity, action.valueExpr().get());
+                    } else if (action.valueExpr().isPresent()) {
+                        ((ListConstructorExpressionNode) action.valueExpr().get()).expressions().forEach(member -> {
+                            if (!isStringLiteral(member)) {
+                                reportNotInline(ctx, name, entity, member);
+                            }
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    private static void reportNotInline(SyntaxNodeAnalysisContext ctx, String field, String entity, Node value) {
+        report(ctx, DATASERVICE_113, value.location(), field, entity, value.toSourceCode().trim());
+    }
+
+    private static boolean isStringLiteral(Node node) {
+        return node instanceof BasicLiteralNode literal && literal.kind() == SyntaxKind.STRING_LITERAL;
+    }
+
+    private static boolean isDataserviceConstant(SyntaxNodeAnalysisContext ctx, Node node) {
+        return node instanceof QualifiedNameReferenceNode
+                && ctx.semanticModel().symbol(node).orElse(null) instanceof ConstantSymbol constant
+                && constant.getModule().map(module -> ORG_NAME.equals(module.id().orgName())
+                        && MODULE_NAME.equals(module.id().moduleName())).orElse(false);
+    }
+
     // Other forms are not operations; the compiler reports them through the annotation's type.
     private static Optional<String> operationValue(Node member) {
         if (member instanceof QualifiedNameReferenceNode reference) {
@@ -180,8 +243,7 @@ final class ExposeAnnotationValidator {
             return OPERATIONS.contains(value) ? Optional.of(value) : Optional.empty();
         }
         if (member instanceof BasicLiteralNode literal && literal.kind() == SyntaxKind.STRING_LITERAL) {
-            String text = literal.literalToken().text();
-            return Optional.of(text.substring(1, text.length() - 1));
+            return Optional.of(stringValue(literal));
         }
         return Optional.empty();
     }

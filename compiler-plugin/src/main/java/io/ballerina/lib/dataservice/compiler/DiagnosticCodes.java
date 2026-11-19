@@ -53,7 +53,9 @@ public enum DiagnosticCodes {
     DATASERVICE_111("DATASERVICE_111", "the @dataservice:Expose annotation of the entity ''{0}'' sets scopes " +
             "for ''{1}'', which is not in ''operations''. Add it to ''operations'', or remove its scopes.", ERROR),
     DATASERVICE_112("DATASERVICE_112", "@dataservice:{0} cannot be used on the field ''{1}'' of the " +
-            "entity ''{2}'', the foreign key of a one-to-one relation. Remove it.", ERROR);
+            "entity ''{2}'', the foreign key of a one-to-one relation. Remove it.", ERROR),
+    DATASERVICE_113("DATASERVICE_113", "''{0}'' in the @dataservice:Expose annotation of the entity ''{1}'' must " +
+            "list its values inline. Replace ''{2}'' with the values it stands for.", ERROR);
 
     private final String code;
     private final String message;

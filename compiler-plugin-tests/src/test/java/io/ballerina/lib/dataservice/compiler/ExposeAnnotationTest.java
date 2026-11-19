@@ -86,9 +86,22 @@ public class ExposeAnnotationTest {
         Assert.assertEquals(errors.stream().map(Diagnostic::message).toList(), List.of(
                 "invalid scope '' in the @dataservice:Expose annotation of the entity 'Department'. A scope " +
                         "must be a non-empty string without whitespace.",
+                "invalid scope 'hr\tadmin' in the @dataservice:Expose annotation of the entity 'Department'. A " +
+                        "scope must be a non-empty string without whitespace.",
                 "invalid scope 'hr admin' in the @dataservice:Expose annotation of the entity 'Department'. A " +
                         "scope must be a non-empty string without whitespace."));
         Assert.assertTrue(errors.stream().allMatch(error -> error.diagnosticInfo().code().equals("DATASERVICE_110")));
+    }
+
+    @Test
+    public void testValuesNotInline() {
+        List<Diagnostic> errors = errors(loadModel("not_inline", "persist", "model.bal")).stream()
+                .filter(error -> error.diagnosticInfo().code().equals("DATASERVICE_113")).toList();
+        Assert.assertEquals(errors.stream().map(Diagnostic::message).toList(), List.of(
+                "'operations' in the @dataservice:Expose annotation of the entity 'Department' must list its " +
+                        "values inline. Replace 'OPERATIONS' with the values it stands for.",
+                "'scopes' in the @dataservice:Expose annotation of the entity 'Department' must list its " +
+                        "values inline. Replace 'ADMIN' with the values it stands for."));
     }
 
     @Test
