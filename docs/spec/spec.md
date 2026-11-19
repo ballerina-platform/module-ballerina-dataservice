@@ -277,7 +277,7 @@ A generated service reads its runtime settings from one configurable record, `da
 
 ### 7.3. Behaviour
 
-1. A generated service checks its page sizes at startup with a module-level `check` on `toPageConfig`, given `pageSize` and `maxPageSize`. `toPageConfig` returns the page sizes as a `PageConfig`, a read-only record with the fields `size` and `maxSize`, or an error, so the program stops when a value is out of range.
+1. A generated service checks its page sizes at startup by calling `toPageConfig` with `check` in its `init`, given `pageSize` and `maxPageSize`. `toPageConfig` returns the page sizes as a `PageConfig`, a read-only record with the fields `size` and `maxSize`, or an error, so the program stops when a value is out of range.
 2. `checkCreateSize` returns an `INVALID_INPUT` error body with the message `A create can hold at most <max> records.` when the number of records in a create is above `maxSize`, and `()` otherwise.
 
 ### 7.4. Errors
