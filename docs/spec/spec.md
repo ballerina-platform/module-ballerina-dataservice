@@ -174,7 +174,7 @@ The compiler plugin checks the field rules of the files described in [3.4](#34-c
 | A rule affects only actions the entity does not allow | `DATASERVICE_109` | warning | `@dataservice:<rule> on the field '<field>' of the entity '<Entity>' has no effect. Remove it, or add '<actions>' to 'operations'.` |
 | `ReadOnly` or `Internal` is on the foreign key of a one-to-one relation of an entity that allows `create` | `DATASERVICE_112` | error | `@dataservice:<rule> cannot be used on the field '<field>' of the entity '<Entity>', the foreign key of a one-to-one relation. Remove it.` |
 
-A relation is one to one when neither of its relation fields is an array. `<actions>` names the actions the rule affects, joined by `' or '`: `update` for `Immutable`, `create` and `update` for `ReadOnly`, `read`, `create` and `update` for `Internal`, and `read` for `Internal` on a relation field.
+A field is nullable when its type includes nil, as `string?` and `string|()` do. A string `value` on a field whose type is an enum, or a union of string singletons, must be one of its member values. A relation is one to one when neither of its relation fields is an array; the relation fields of an entity to itself pair the owning fields, which declare their foreign keys, in order with the others. `<actions>` names the actions the rule affects, joined by `' or '`: `update` for `Immutable`, `create` and `update` for `ReadOnly`, `read`, `create` and `update` for `Internal`, and `read` for `Internal` on a relation field.
 
 ## 5. Errors
 

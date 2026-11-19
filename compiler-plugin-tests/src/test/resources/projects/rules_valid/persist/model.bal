@@ -13,6 +13,10 @@ type Employee record {|
     string state;
     @dataservice:Internal
     string? notes;
+    @dataservice:Internal
+    string|() remarks;
+    @dataservice:ReadOnly {value: "ACTIVE"}
+    Status status;
     @dataservice:Internal {value: 1}
     int tenantId;
     @dataservice:ReadOnly {value: 8}
@@ -64,3 +68,8 @@ type Owner record {|
     readonly int id;
     Profile? profile;
 |};
+
+enum Status {
+    ACTIVE,
+    ON_LEAVE
+}

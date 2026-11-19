@@ -20,8 +20,13 @@ package io.ballerina.lib.dataservice.compiler;
 import io.ballerina.compiler.api.ModuleID;
 import io.ballerina.compiler.api.SemanticModel;
 import io.ballerina.compiler.api.symbols.AnnotationSymbol;
+import io.ballerina.compiler.api.symbols.ConstantSymbol;
 import io.ballerina.compiler.api.symbols.RecordFieldSymbol;
+import io.ballerina.compiler.api.symbols.SingletonTypeSymbol;
+import io.ballerina.compiler.api.symbols.TypeReferenceTypeSymbol;
 import io.ballerina.compiler.api.symbols.TypeSymbol;
+import io.ballerina.compiler.api.symbols.UnionTypeSymbol;
+import io.ballerina.compiler.api.values.ConstantValue;
 import io.ballerina.compiler.syntax.tree.AnnotationNode;
 import io.ballerina.compiler.syntax.tree.ArrayTypeDescriptorNode;
 import io.ballerina.compiler.syntax.tree.BasicLiteralNode;
@@ -44,6 +49,7 @@ import io.ballerina.projects.plugins.SyntaxNodeAnalysisContext;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -62,6 +68,7 @@ import static io.ballerina.lib.dataservice.compiler.DiagnosticCodes.DATASERVICE_
 import static io.ballerina.lib.dataservice.compiler.PluginUtils.MODULE_NAME;
 import static io.ballerina.lib.dataservice.compiler.PluginUtils.ORG_NAME;
 import static io.ballerina.lib.dataservice.compiler.PluginUtils.fieldName;
+import static io.ballerina.lib.dataservice.compiler.PluginUtils.identifierName;
 
 /**
  * Validates the field rules `@dataservice:ReadOnly`, `@dataservice:Immutable` and `@dataservice:Internal` of a
@@ -104,8 +111,10 @@ final class FieldRuleValidator {
                             && RULES.contains(annotation.name()))
                     .toList();
             String name = field.name();
-            if (foreignKeys.declared().containsKey(name)) {
-                foreignKeys.rules().put(name, rules.size() == 1 ? Optional.of(rules.get(0).name()) : Optional.empty());
+            // A foreign key with several rules is reported once, as DATASERVICE_103, and is not compared with the
+            // other keys of its relation.
+            if (foreignKeys.declared().containsKey(name) && rules.size() <= 1) {
+                foreignKeys.rules().put(name, rules.isEmpty() ? Optional.empty() : Optional.of(rules.get(0).name()));
                 if (rules.size() == 1) {
                     foreignKeys.annotations().put(name, rules.get(0).node());
                 }
@@ -130,8 +139,7 @@ final class FieldRuleValidator {
                     continue;
                 }
                 affected = List.of("read");
-            } else if (!checkValue(ctx, annotation, rule, field, entity,
-                    field.type() instanceof OptionalTypeDescriptorNode, value(annotation))) {
+            } else if (!checkValue(ctx, annotation, rule, field, entity, value(annotation))) {
                 continue;
             }
             if (!operations.isEmpty() && affected.stream().noneMatch(operations::contains)) {
@@ -161,7 +169,7 @@ final class FieldRuleValidator {
             }
             Field relationField = foreignKeys.relationFields().get(relation);
             if (relationField == null || !operations.contains("create")
-                    || !isOneToOne(relationField, entity, entities, foreignKeys.relationIndexes().get(relation))) {
+                    || !isOneToOne(relationField, entity, entities, foreignKeys)) {
                 return;
             }
             for (String key : keys) {
@@ -174,17 +182,18 @@ final class FieldRuleValidator {
     }
 
     private static boolean checkValue(SyntaxNodeAnalysisContext ctx, AnnotationNode annotation, String rule,
-                                      Field field, String entity, boolean nullable, Optional<ExpressionNode> value) {
+                                      Field field, String entity, Optional<ExpressionNode> value) {
+        Optional<TypeSymbol> fieldType = ctx.semanticModel().symbol(field.node())
+                .flatMap(symbol -> symbol instanceof RecordFieldSymbol recordField
+                        ? Optional.of(recordField.typeDescriptor()) : Optional.empty());
         if (value.isEmpty()) {
+            boolean nullable = fieldType.isPresent() && ctx.semanticModel().types().NIL.subtypeOf(fieldType.get());
             if (!IMMUTABLE.equals(rule) && !nullable && !hasSqlAnnotation(field, "Generated")) {
                 report(ctx, DATASERVICE_105, annotation, field.name(), entity, rule);
                 return false;
             }
             return true;
         }
-        Optional<TypeSymbol> fieldType = ctx.semanticModel().symbol(field.node())
-                .flatMap(symbol -> symbol instanceof RecordFieldSymbol recordField
-                        ? Optional.of(recordField.typeDescriptor()) : Optional.empty());
         if (fieldType.isPresent() && !isSubtype(ctx.semanticModel(), value.get(), fieldType.get())) {
             report(ctx, DATASERVICE_106, annotation, rule, field.name(), entity,
                     field.type().toSourceCode().trim());
@@ -198,7 +207,10 @@ final class FieldRuleValidator {
         if (valueType.isPresent() && valueType.get().subtypeOf(type)) {
             return true;
         }
-        // The value is copied into the generated code as written, where a numeric literal takes the field's type.
+        // The value is copied into the generated code as written, where a literal takes the field's type.
+        if (expression instanceof BasicLiteralNode string && string.kind() == SyntaxKind.STRING_LITERAL) {
+            return memberValues(type).contains(PluginUtils.stringValue(string));
+        }
         Optional<Token> literal = numericLiteral(expression);
         if (literal.isEmpty()) {
             return false;
@@ -224,6 +236,36 @@ final class FieldRuleValidator {
         return (asFloat && model.types().FLOAT.subtypeOf(type)) || (asDecimal && model.types().DECIMAL.subtypeOf(type));
     }
 
+    // The string values of an enum or a union of string singletons, such as the members of `Status?`.
+    private static Set<String> memberValues(TypeSymbol type) {
+        Set<String> values = new HashSet<>();
+        if (type instanceof TypeReferenceTypeSymbol reference) {
+            if (reference.definition() instanceof ConstantSymbol constant) {
+                constantValue(constant).ifPresent(values::add);
+            } else {
+                values.addAll(memberValues(reference.typeDescriptor()));
+            }
+        } else if (type instanceof UnionTypeSymbol union) {
+            union.memberTypeDescriptors().forEach(member -> values.addAll(memberValues(member)));
+        } else if (type instanceof ConstantSymbol constant) {
+            constantValue(constant).ifPresent(values::add);
+        } else if (type instanceof SingletonTypeSymbol singleton) {
+            String text = singleton.signature();
+            if (text.length() >= 2 && text.startsWith("\"") && text.endsWith("\"")) {
+                values.add(text.substring(1, text.length() - 1));
+            }
+        }
+        return values;
+    }
+
+    private static Optional<String> constantValue(ConstantSymbol constant) {
+        Object value = constant.constValue();
+        if (value instanceof ConstantValue constantValue) {
+            value = constantValue.value();
+        }
+        return value instanceof String text ? Optional.of(text) : Optional.empty();
+    }
+
     private static Optional<Token> numericLiteral(ExpressionNode expression) {
         ExpressionNode inner = expression instanceof UnaryExpressionNode unary
                 && unary.unaryOperator().kind() == SyntaxKind.MINUS_TOKEN ? unary.expression() : expression;
@@ -231,17 +273,26 @@ final class FieldRuleValidator {
                 Optional.of(literal.literalToken()) : Optional.empty();
     }
 
+    // The i-th relation field to an entity pairs with the i-th relation field back from it. Within one entity, the
+    // owning fields, which declare their foreign keys, pair in order with the fields that do not.
     private static boolean isOneToOne(Field field, String entity, Map<String, TypeDefinitionNode> entities,
-                                      int index) {
+                                      ForeignKeys foreignKeys) {
         if (field.type() instanceof ArrayTypeDescriptorNode) {
             return false;
         }
-        TypeDefinitionNode related = entities.get(typeName(field.type()).orElseThrow());
+        String target = typeName(field.type()).orElseThrow();
         List<Field> back = new ArrayList<>();
-        for (Node node : ((RecordTypeDescriptorNode) related.typeDescriptor()).fields()) {
+        for (Node node : ((RecordTypeDescriptorNode) entities.get(target).typeDescriptor()).fields()) {
             Field.of(node).filter(other -> entity.equals(typeName(other.type()).orElse(""))).ifPresent(back::add);
         }
-        return index < back.size() && !(back.get(index).type() instanceof ArrayTypeDescriptorNode);
+        int index = foreignKeys.relationIndexes().get(field.name());
+        if (target.equals(entity)) {
+            Set<String> owning = new HashSet<>(foreignKeys.declared().values());
+            List<Field> owners = back.stream().filter(other -> owning.contains(other.name())).toList();
+            back = back.stream().filter(other -> !owning.contains(other.name())).toList();
+            index = owners.stream().map(Field::name).toList().indexOf(field.name());
+        }
+        return index >= 0 && index < back.size() && !(back.get(index).type() instanceof ArrayTypeDescriptorNode);
     }
 
     private static Optional<String> relationTarget(Node type, Map<String, TypeDefinitionNode> entities) {
@@ -315,12 +366,12 @@ final class FieldRuleValidator {
 
         private static Optional<Field> of(Node node) {
             if (node instanceof RecordFieldNode field) {
-                return Optional.of(new Field(field.fieldName().text().trim(), field.readonlyKeyword().isPresent(),
-                        field.typeName(), field.metadata(), field, List.of()));
+                return Optional.of(new Field(identifierName(field.fieldName().text().trim()),
+                        field.readonlyKeyword().isPresent(), field.typeName(), field.metadata(), field, List.of()));
             }
             if (node instanceof RecordFieldWithDefaultValueNode field) {
-                return Optional.of(new Field(field.fieldName().text().trim(), field.readonlyKeyword().isPresent(),
-                        field.typeName(), field.metadata(), field, List.of()));
+                return Optional.of(new Field(identifierName(field.fieldName().text().trim()),
+                        field.readonlyKeyword().isPresent(), field.typeName(), field.metadata(), field, List.of()));
             }
             return Optional.empty();
         }

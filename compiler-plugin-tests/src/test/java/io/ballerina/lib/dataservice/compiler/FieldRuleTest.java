@@ -84,7 +84,21 @@ public class FieldRuleTest {
                 {"rule_one_to_one", "DATASERVICE_112", "@dataservice:ReadOnly cannot be used on the field " +
                         "'employeeId' of the entity 'Profile', the foreign key of a one-to-one relation. Remove it.",
                         8},
+                {"rule_foreign_key_quoted", "DATASERVICE_108", "the foreign key fields of the relation 'slot' of " +
+                        "the entity 'Employee' must have the same field rule.", 8},
+                {"rule_foreign_key_two_rules", "DATASERVICE_103", "the field 'slotCode' of the entity 'Employee' " +
+                        "has more than one of @dataservice:ReadOnly, @dataservice:Immutable and " +
+                        "@dataservice:Internal. Keep one.", 9},
+                {"rule_value_enum", "DATASERVICE_106", "the 'value' in @dataservice:ReadOnly of the field 'status' " +
+                        "of the entity 'Employee' is not a 'Status'.", 7},
         };
+    }
+
+    @Test
+    public void testSelfRelationIsNotOneToOne() {
+        List<Diagnostic> diagnostics = diagnostics("rule_self_relation").stream()
+                .filter(diagnostic -> diagnostic.diagnosticInfo().code().startsWith("DATASERVICE_")).toList();
+        Assert.assertEquals(diagnostics, List.of());
     }
 
     @Test
