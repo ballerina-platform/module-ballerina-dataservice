@@ -1,0 +1,4 @@
+[package]
+org = "dataservice_test"
+name = "rule_self_relation"
+version = "0.1.0"

@@ -1,0 +1,4 @@
+[package]
+org = "dataservice_test"
+name = "not_inline"
+version = "0.1.0"
