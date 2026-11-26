@@ -21,7 +21,7 @@ modules = [
 [[package]]
 org = "ballerina"
 name = "dataservice"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
 	{org = "ballerina", name = "constraint"},
 	{org = "ballerina", name = "io"},
